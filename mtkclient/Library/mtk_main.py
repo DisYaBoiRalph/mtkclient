@@ -113,7 +113,7 @@ class ArgHandler(metaclass=LogBase):
         except AttributeError:
             pass
         try:
-            if args.preloader is not None:
+            if args.var1 is not None:
                 config.chipconfig.var1 = getint(args.var1)
                 self.info("O:Var1:\t\t" + hex(config.chipconfig.var1))
         except AttributeError:
