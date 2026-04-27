@@ -157,7 +157,8 @@ class DeviceHandler(QObject):
                            update_status_text=self.update_status_text)
         config.gpt_settings = GptSettings(gpt_num_part_entries='0', gpt_part_entry_size='0',
                                           gpt_part_entry_start_lba='0')  # This actually sets the right GPT settings..
-        config.reconnect = True
+        # Keep GUI behavior stable on devices that flap USB during reconnect.
+        config.reconnect = False
         config.uartloglevel = 2
         if "logchannel" in kwargs:
             config.logchannel = kwargs["logchannel"]
@@ -178,22 +179,26 @@ def getDevInfo(thread, parameters):
     mtk_class = _devhandler.da_handler.mtk
     da_handler = _devhandler.da_handler
     try:
-        if not mtk_class.port.cdc.connect():
-            mtk_class.preloader.init()
-        else:
+        # Avoid duplicate low-level connect attempts before DA setup.
+        # DaHandler.connect() already performs the required connect/init flow.
+        mtk_class = da_handler.connect(mtk_class)
+        if mtk_class is None:
             with lock:
-                phone_info['cdcInit'] = True
+                phone_info['cantConnect'] = True
+            thread.sendUpdateSignal.emit(phone_info.copy())
+            return
+        with lock:
+            phone_info['cdcInit'] = True
     except Exception as e:
         print(f"Connection exception: {e}")  # Add for debugging; replace with thread.sendToLogSignal if available
         with lock:
             phone_info['cantConnect'] = True
+        thread.sendUpdateSignal.emit(phone_info.copy())
+        return
     with lock:
         phone_info['chipset'] = (str(mtk_class.config.chipconfig.name) +
                                  " (" + str(mtk_class.config.chipconfig.description) + ")")
     thread.sendUpdateSignal.emit(phone_info.copy())
-    mtk_class = da_handler.connect(mtk_class)
-    if mtk_class is None:
-        return
     mtk_class = da_handler.configure_da(mtk_class)
     if mtk_class:
         with lock:
@@ -687,7 +692,7 @@ def main():
         dpiMultiplier = 2
     else:
         dpiMultiplier = 1
-    win.setWindowTitle("MTKClient - Version 2.1.4")
+    win.setWindowTitle("MTKClient - Version 2.1.5")
     win.show()
 
     # Device setup
